@@ -1,0 +1,38 @@
+# render.yaml — Configuration déclarative pour Render
+# Placez ce fichier à la racine du projet (même niveau que manage.py)
+# Render le détecte automatiquement et configure tout sans interface web
+
+services:
+  - type: web
+    name: sav-chatbot
+    runtime: python
+    region: frankfurt          # Le plus proche de l'Afrique centrale
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt &&
+      python manage.py collectstatic --noinput
+    startCommand: >
+      gunicorn sav_chatbot.wsgi:application
+      --bind 0.0.0.0:$PORT
+      --workers 2
+      --timeout 120
+      --log-level info
+    healthCheckPath: /
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true          # Render génère une clé aléatoire sécurisée
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "sav-chatbot.onrender.com"
+      - key: DB_SSL
+        value: "True"               # Neon exige SSL
+      - key: DATABASE_URL
+        sync: false                  # À renseigner manuellement (URL Neon)
+      - key: GROQ_API_KEY
+        sync: false                  # À renseigner manuellement
+      - key: IMPORT_TAILLE_LOT
+        value: "500"
+      - key: CHATBOT_MAX_PRODUITS_CONTEXTE
+        value: "5"
+    autoDeploy: true                 # Redéploiement auto à chaque git push

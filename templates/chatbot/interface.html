@@ -1,0 +1,608 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SAV — Assistant Intelligent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --noir:       #0a0a0b;
+      --surface:    #111113;
+      --surface-2:  #1a1a1e;
+      --surface-3:  #242428;
+      --bordure:    #2e2e34;
+      --accent:     #e8ff47;
+      --accent-dim: #b8cc2a;
+      --texte:      #e8e8e4;
+      --texte-dim:  #7a7a80;
+      --rouge:      #ff4d4d;
+      --vert:       #4dff91;
+      --rayon:      4px;
+      --transition: 180ms cubic-bezier(.4,0,.2,1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--noir);
+      color: var(--texte);
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      overflow: hidden;
+    }
+
+    /* ── Layout ── */
+    .grille-app {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      grid-template-rows: 56px 1fr;
+      height: 100vh;
+    }
+
+    /* ── Header ── */
+    .entete {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--bordure);
+      background: var(--surface);
+      animation: glisser-bas 400ms ease both;
+    }
+    .entete-logo {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -.02em;
+      color: var(--accent);
+    }
+    .entete-logo span { color: var(--texte-dim); font-weight: 400; }
+    .entete-statut {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--texte-dim);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .point-statut {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--vert);
+      box-shadow: 0 0 8px var(--vert);
+      animation: pulse 2s infinite;
+    }
+
+    /* ── Panneau latéral ── */
+    .panneau-lateral {
+      border-right: 1px solid var(--bordure);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 16px;
+      gap: 24px;
+      overflow-y: auto;
+      animation: glisser-gauche 500ms ease both;
+    }
+    .section-titre {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: var(--texte-dim);
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--bordure);
+    }
+    .suggestions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .suggestion-btn {
+      background: var(--surface-2);
+      border: 1px solid var(--bordure);
+      border-radius: var(--rayon);
+      color: var(--texte);
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      padding: 10px 12px;
+      text-align: left;
+      cursor: pointer;
+      transition: var(--transition);
+      transition-property: border-color, background, color;
+      line-height: 1.4;
+    }
+    .suggestion-btn:hover {
+      border-color: var(--accent);
+      background: rgba(232,255,71,.06);
+      color: var(--accent);
+    }
+
+    .produits-panel { display: flex; flex-direction: column; gap: 8px; }
+    .produit-card {
+      background: var(--surface-2);
+      border: 1px solid var(--bordure);
+      border-radius: var(--rayon);
+      padding: 10px 12px;
+      font-size: 12px;
+      animation: apparaitre .3s ease both;
+    }
+    .produit-card-nom {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--texte);
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .produit-card-prix { color: var(--accent); }
+    .produit-card-stock-ok  { color: var(--vert); font-size: 11px; }
+    .produit-card-stock-non { color: var(--rouge); font-size: 11px; }
+
+    /* ── Zone de chat ── */
+    .zone-chat {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: apparaitre 600ms ease both;
+    }
+    .messages-conteneur {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+    .messages-conteneur::-webkit-scrollbar { width: 4px; }
+    .messages-conteneur::-webkit-scrollbar-track { background: transparent; }
+    .messages-conteneur::-webkit-scrollbar-thumb { background: var(--bordure); border-radius: 2px; }
+
+    /* ── Messages ── */
+    .message {
+      display: flex;
+      gap: 12px;
+      max-width: 760px;
+      animation: message-entree .25s ease both;
+    }
+    .message--utilisateur {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+    .message-avatar {
+      width: 28px; height: 28px;
+      border-radius: var(--rayon);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      font-family: 'Syne', sans-serif;
+    }
+    .message--utilisateur .message-avatar {
+      background: var(--accent);
+      color: var(--noir);
+    }
+    .message--assistant .message-avatar {
+      background: var(--surface-3);
+      color: var(--texte-dim);
+      border: 1px solid var(--bordure);
+    }
+    .message-bulle {
+      padding: 12px 16px;
+      border-radius: var(--rayon);
+      border: 1px solid var(--bordure);
+      max-width: 600px;
+      line-height: 1.65;
+    }
+    .message--utilisateur .message-bulle {
+      background: rgba(232,255,71,.08);
+      border-color: rgba(232,255,71,.25);
+      color: var(--texte);
+    }
+    .message--assistant .message-bulle {
+      background: var(--surface-2);
+    }
+
+    /* Message d'accueil */
+    .message-accueil {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--texte-dim);
+      animation: apparaitre 800ms ease both;
+    }
+    .message-accueil-titre {
+      font-family: 'Syne', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--texte);
+      letter-spacing: -.03em;
+      margin-bottom: 8px;
+    }
+    .message-accueil-titre em { color: var(--accent); font-style: normal; }
+
+    /* Indicateur de frappe */
+    .indicateur-frappe {
+      display: flex;
+      gap: 4px;
+      padding: 14px 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--bordure);
+      border-radius: var(--rayon);
+      width: fit-content;
+    }
+    .indicateur-frappe span {
+      width: 5px; height: 5px;
+      background: var(--texte-dim);
+      border-radius: 50%;
+      animation: rebondir .9s infinite;
+    }
+    .indicateur-frappe span:nth-child(2) { animation-delay: .15s; }
+    .indicateur-frappe span:nth-child(3) { animation-delay: .30s; }
+
+    /* ── Zone de saisie ── */
+    .zone-saisie {
+      border-top: 1px solid var(--bordure);
+      padding: 16px 24px;
+      background: var(--surface);
+    }
+    .saisie-interne {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      background: var(--surface-2);
+      border: 1px solid var(--bordure);
+      border-radius: var(--rayon);
+      padding: 10px 14px;
+      transition: border-color var(--transition);
+    }
+    .saisie-interne:focus-within { border-color: var(--accent); }
+
+    #champ-message {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      color: var(--texte);
+      font-family: 'DM Mono', monospace;
+      font-size: 14px;
+      resize: none;
+      max-height: 120px;
+      min-height: 22px;
+      line-height: 1.5;
+    }
+    #champ-message::placeholder { color: var(--texte-dim); }
+
+    .btn-envoyer {
+      width: 34px; height: 34px;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--rayon);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+      transition-property: background, transform;
+      flex-shrink: 0;
+    }
+    .btn-envoyer:hover  { background: var(--accent-dim); }
+    .btn-envoyer:active { transform: scale(.94); }
+    .btn-envoyer:disabled { background: var(--surface-3); cursor: not-allowed; }
+    .btn-envoyer svg { fill: var(--noir); }
+
+    .saisie-info {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--texte-dim);
+    }
+    kbd {
+      background: var(--surface-3);
+      border: 1px solid var(--bordure);
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+    }
+
+    /* ── Animations ── */
+    @keyframes glisser-bas    { from { opacity:0; transform: translateY(-12px); } to { opacity:1; transform: none; } }
+    @keyframes glisser-gauche { from { opacity:0; transform: translateX(-16px); } to { opacity:1; transform: none; } }
+    @keyframes apparaitre     { from { opacity:0; } to { opacity:1; } }
+    @keyframes message-entree { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: none; } }
+    @keyframes rebondir {
+      0%, 80%, 100% { transform: translateY(0); opacity:.4; }
+      40%           { transform: translateY(-5px); opacity:1; }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity:1; }
+      50%       { opacity:.4; }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .grille-app { grid-template-columns: 1fr; grid-template-rows: 56px 1fr auto; }
+      .panneau-lateral { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="grille-app">
+
+  <!-- En-tête -->
+  <header class="entete">
+    <div class="entete-logo">SAV<span>/assist</span></div>
+    <div class="entete-statut">
+      <div class="point-statut"></div>
+      Système opérationnel
+    </div>
+  </header>
+
+  <!-- Panneau latéral -->
+  <aside class="panneau-lateral">
+
+    <div>
+      <div class="section-titre">Suggestions</div>
+      <div class="suggestions-list" id="liste-suggestions">
+        <button class="suggestion-btn" onclick="utiliserSuggestion(this)">Quels produits electronics avez-vous ?</button>
+        <button class="suggestion-btn" onclick="utiliserSuggestion(this)">Je cherche un produit sous 30€</button>
+        <button class="suggestion-btn" onclick="utiliserSuggestion(this)">Quels sont vos articles les mieux notés ?</button>
+        <button class="suggestion-btn" onclick="utiliserSuggestion(this)">Ce produit est-il disponible en stock ?</button>
+        <button class="suggestion-btn" onclick="utiliserSuggestion(this)">Quelle est votre politique de retour ?</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-titre">Produits référencés</div>
+      <div class="produits-panel" id="panneau-produits">
+        <span style="font-size:12px;color:var(--texte-dim);">Apparaissent après votre première question.</span>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Zone de chat principale -->
+  <main class="zone-chat">
+    <div class="messages-conteneur" id="conteneur-messages">
+      <div class="message-accueil" id="ecran-accueil">
+        <div class="message-accueil-titre">Bonjour, je suis votre<br/><em>assistant SAV</em></div>
+        <p>Posez-moi une question sur nos produits,<br/>leur disponibilité, leurs caractéristiques ou leurs tarifs.</p>
+      </div>
+    </div>
+
+    <!-- Saisie -->
+    <div class="zone-saisie">
+      <div class="saisie-interne">
+        <textarea
+          id="champ-message"
+          placeholder="Votre question sur un produit…"
+          rows="1"
+          maxlength="1000"
+        ></textarea>
+        <button class="btn-envoyer" id="btn-envoyer" title="Envoyer (Entrée)">
+          <svg width="14" height="14" viewBox="0 0 16 16">
+            <path d="M1 8L15 1L8 15L7 9L1 8Z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="saisie-info">
+        <span><kbd>Entrée</kbd> pour envoyer · <kbd>Maj+Entrée</kbd> pour sauter une ligne</span>
+        <span id="compteur-car">0 / 1000</span>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+  // ── État de l'application ──
+  const etat = {
+    conversationUuid: localStorage.getItem('sav_conversation_uuid') || null,
+    enAttente: false,
+  };
+
+  // ── Éléments DOM ──
+  const champMessage     = document.getElementById('champ-message');
+  const btnEnvoyer       = document.getElementById('btn-envoyer');
+  const conteneurMessages = document.getElementById('conteneur-messages');
+  const ecranAccueil     = document.getElementById('ecran-accueil');
+  const panneauProduits = document.getElementById('panneau-produits');
+  const compteurCar      = document.getElementById('compteur-car');
+
+  // ── Auto-resize du textarea ──
+  champMessage.addEventListener('input', () => {
+    champMessage.style.height = 'auto';
+    champMessage.style.height = Math.min(champMessage.scrollHeight, 120) + 'px';
+    compteurCar.textContent = `${champMessage.value.length} / 1000`;
+  });
+
+  // ── Envoi via Entrée (Maj+Entrée = saut de ligne) ──
+  champMessage.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      envoyerMessage();
+    }
+  });
+
+  btnEnvoyer.addEventListener('click', envoyerMessage);
+
+  // ── Utiliser une suggestion ──
+  function utiliserSuggestion(btn) {
+    champMessage.value = btn.textContent.trim();
+    champMessage.dispatchEvent(new Event('input'));
+    champMessage.focus();
+  }
+
+  // ── Ajouter un message dans le DOM ──
+  function ajouterMessage(role, contenu) {
+    if (ecranAccueil) ecranAccueil.remove();
+
+    const div = document.createElement('div');
+    div.className = `message message--${role === 'user' ? 'utilisateur' : 'assistant'}`;
+    div.innerHTML = `
+      <div class="message-avatar">${role === 'user' ? 'V' : 'AI'}</div>
+      <div class="message-bulle">${echapper(contenu).replace(/\n/g, '<br/>')}</div>
+    `;
+    conteneurMessages.appendChild(div);
+    conteneurMessages.scrollTop = conteneurMessages.scrollHeight;
+    return div;
+  }
+
+  // ── Indicateur de frappe ──
+  function afficherIndicateurFrappe() {
+    const div = document.createElement('div');
+    div.className = 'message message--assistant';
+    div.id = 'indicateur-frappe';
+    div.innerHTML = `
+      <div class="message-avatar">AI</div>
+      <div class="indicateur-frappe">
+        <span></span><span></span><span></span>
+      </div>
+    `;
+    conteneurMessages.appendChild(div);
+    conteneurMessages.scrollTop = conteneurMessages.scrollHeight;
+  }
+
+  function supprimerIndicateurFrappe() {
+    const el = document.getElementById('indicateur-frappe');
+    if (el) el.remove();
+  }
+
+  // ── Afficher les produits référencés dans le panneau latéral ──
+  function afficherProduitsReferences(produits) {
+    const panneau = document.getElementById('panneau-produits');
+    if (!produits || produits.length === 0) return;
+
+    panneau.innerHTML = '';
+    produits.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'produit-card';
+      const stockClasse = p.en_stock ? 'produit-card-stock-ok' : 'produit-card-stock-non';
+      const stockTexte  = p.en_stock ? '● En stock' : '○ Rupture';
+      card.innerHTML = `
+        <div class="produit-card-nom" title="${echapper(p.nom)}">${echapper(p.nom)}</div>
+        <div class="produit-card-prix">${p.prix.toFixed(2)} €</div>
+        <div class="${stockClasse}">${stockTexte}</div>
+      `;
+      panneau.appendChild(card);
+    });
+  }
+
+  // ── Envoi principal ──
+  async function envoyerMessage() {
+    const texte = champMessage.value.trim();
+    if (!texte || etat.enAttente) return;
+
+    etat.enAttente = true;
+    btnEnvoyer.disabled = true;
+
+    // Affichage immédiat du message utilisateur
+    ajouterMessage('user', texte);
+    champMessage.value = '';
+    champMessage.style.height = 'auto';
+    compteurCar.textContent = '0 / 1000';
+
+    afficherIndicateurFrappe();
+
+    try {
+      const reponse = await fetch("{% url 'chatbot:envoyer' %}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': obtenirCsrf(),
+        },
+        body: JSON.stringify({
+          message: texte,
+          conversation_uuid: etat.conversationUuid,
+        }),
+      });
+
+      supprimerIndicateurFrappe();
+
+      // Tente de parser le JSON même en cas d'erreur serveur (500)
+      let donnees = {};
+      try { donnees = await reponse.json(); } catch (_) {}
+
+      if (reponse.ok) {
+        etat.conversationUuid = donnees.conversation_uuid;
+        localStorage.setItem('sav_conversation_uuid', etat.conversationUuid);
+        ajouterMessage('assistant', donnees.reponse);
+        afficherProduitsReferences(donnees.produits_references);
+      } else if (reponse.status === 400) {
+        ajouterMessage('assistant', `⚠️ ${donnees.erreur || 'Requête invalide.'}`);
+      } else if (reponse.status === 500) {
+        ajouterMessage('assistant', '⚠️ Erreur serveur interne. Consultez les logs Django dans Git Bash.');
+        console.error('Détail erreur 500 :', donnees);
+      } else {
+        ajouterMessage('assistant', `⚠️ Erreur inattendue (code ${reponse.status}).`);
+      }
+
+    } catch (err) {
+      supprimerIndicateurFrappe();
+      // Ici c'est une vraie erreur réseau — Django ne répond pas du tout
+      ajouterMessage('assistant', '⚠️ Impossible de joindre le serveur. Vérifiez que Django tourne sur le port 8000.');
+      console.error('Erreur réseau :', err);
+    } finally {
+      etat.enAttente = false;
+      btnEnvoyer.disabled = false;
+      champMessage.focus();
+    }
+  }
+
+  // ── Utilitaires ──
+  function echapper(chaine) {
+    const div = document.createElement('div');
+    div.textContent = chaine;
+    return div.innerHTML;
+  }
+
+  function obtenirCsrf() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) return meta.getAttribute('content');
+    const cookie = document.cookie.split('; ').find(c => c.startsWith('csrftoken='));
+    return cookie ? cookie.split('=')[1] : '';
+  }
+
+  // ── Restauration de session ──
+  async function restaurerConversation() {
+    if (!etat.conversationUuid) return;
+    try {
+      const r = await fetch(`/chatbot/historique/${etat.conversationUuid}/`);
+      if (!r.ok) { etat.conversationUuid = null; localStorage.removeItem('sav_conversation_uuid'); return; }
+      const d = await r.json();
+      if (d.messages && d.messages.length > 0) {
+        d.messages.forEach(m => ajouterMessage(m.role, m.contenu));
+      }
+    } catch { /* Session expirée ou serveur indisponible — on repart à zéro */ }
+  }
+
+  // Focus auto + restauration au chargement
+  champMessage.focus();
+  restaurerConversation();
+</script>
+
+<!-- CSRF token pour les requêtes AJAX -->
+{% csrf_token %}
+<script>
+  // Injecte le token CSRF dans toutes les requêtes fetch
+  const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+  if (csrfInput) {
+    document.cookie = `csrftoken=${csrfInput.value}; path=/`;
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Variables d'environnement et secrets (TRÈS IMPORTANT)
+.env
+.env.example
+
+# Base de données locale
+db.sqlite3
+*.db
+
+# Fichiers de cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Fichiers d'environnement virtuel (si tu en crées un plus tard)
+venv/
+.venv/
+env/
+
+# Fichiers du système d'exploitation
+.DS_Store
+Thumbs.db
+
+# Fichiers médias et statiques collectés localement
+/staticfiles/
+/media/
