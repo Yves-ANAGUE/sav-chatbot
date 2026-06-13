@@ -1,7 +1,7 @@
 """
-Configuration Django — fonctionne en local ET sur Render sans modifier une ligne.
-
-python-decouple lit depuis .env en local, depuis les variables d'environnement sur Render.
+Configuration Django — fonctionne en local ET sur Vercel.
+Vercel est serverless : pas de gunicorn, pas de processus persistant.
+Les fichiers statiques sont servis par le CDN Vercel automatiquement.
 """
 import os
 from pathlib import Path
@@ -19,6 +19,12 @@ ALLOWED_HOSTS = config(
     cast=Csv(),
 )
 
+# Vercel génère des domaines dynamiques pour chaque déploiement
+# Cette variable permet de les accepter automatiquement
+VERCEL_URL = os.environ.get("VERCEL_URL", "")
+if VERCEL_URL and VERCEL_URL not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(VERCEL_URL)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -33,7 +39,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # Juste après Security
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -62,9 +68,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "sav_chatbot.wsgi.application"
 
-# --- Base de données ---
-# En local  : utilise les variables DB_* du .env
-# Sur Render : utilise DATABASE_URL fournie par Neon
+# --- Base de données Neon (PostgreSQL permanent gratuit) ---
 DATABASES = {
     "default": dj_database_url.config(
         env="DATABASE_URL",
@@ -75,7 +79,7 @@ DATABASES = {
             f"{config('DB_PORT', default='5432')}/"
             f"{config('DB_NOM', default='sav_chatbot_db')}"
         ),
-        conn_max_age=600,
+        conn_max_age=0,   # 0 = pas de connexions persistantes (obligatoire en serverless)
         ssl_require=config("DB_SSL", default=False, cast=bool),
     )
 }
@@ -92,7 +96,9 @@ TIME_ZONE = "Africa/Douala"
 USE_I18N = True
 USE_TZ = True
 
-# --- Fichiers statiques via WhiteNoise ---
+# --- Fichiers statiques ---
+# Sur Vercel : servis par le CDN automatiquement depuis /static/
+# En local : servis par WhiteNoise
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
@@ -105,20 +111,17 @@ GROQ_API_KEY = config("GROQ_API_KEY", default="")
 IMPORT_TAILLE_LOT = config("IMPORT_TAILLE_LOT", default=500, cast=int)
 CHATBOT_MAX_PRODUITS_CONTEXTE = config("CHATBOT_MAX_PRODUITS_CONTEXTE", default=5, cast=int)
 
-# --- Sécurité HTTPS (production uniquement) ---
+# --- Sécurité HTTPS ---
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    # Pas de SECURE_SSL_REDIRECT sur Vercel (Vercel gère le HTTPS en amont)
 
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "formatters": {
-        "simple": {"format": "[{asctime}] {levelname} {name}: {message}", "style": "{"}
-    },
-    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "simple"}},
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": "INFO"},
     "loggers": {
         "catalogue": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
