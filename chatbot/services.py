@@ -3,6 +3,10 @@ Service IA du chatbot SAV.
 
 Fournisseur IA : Groq (gratuit) via la librairie requests.
 Ajoutez dans .env : GROQ_API_KEY=gsk_votre_cle_ici
+
+Stratégie de robustesse : fallback automatique multi-modèles.
+Si un modèle est retiré (404), rate-limited (429) ou en erreur réseau,
+le suivant de MODELES_FALLBACK est essayé automatiquement.
 """
 import json
 import logging
@@ -26,6 +30,16 @@ Règles absolues :
 
 FORMAT DE RÉPONSE : Texte clair en français, sans markdown excessif.
 """
+
+# ── Modèles Groq avec fallback automatique ──
+# Ordre de préférence : du plus puissant au plus léger.
+# Vérifier la disponibilité : curl -H "Authorization: Bearer $GROQ_API_KEY" \
+#   https://api.groq.com/openai/v1/models
+MODELES_FALLBACK = [
+    "openai/gpt-oss-120b",        # Principal — le plus performant
+    "openai/gpt-oss-20b",         # Fallback rapide et léger
+    "qwen/qwen3.8-27b",           # Fallback multimodal (texte + image)
+]
 
 
 def _construire_contexte_produits(question: str) -> tuple[str, list]:
@@ -73,8 +87,13 @@ def _construire_contexte_produits(question: str) -> tuple[str, list]:
 
 def _appeler_api_groq(historique_messages: list, system_prompt: str) -> str:
     """
-    Appelle l'API Groq via la librairie requests.
-    requests envoie un User-Agent standard qui passe le WAF Cloudflare,
+    Appelle l'API Groq avec fallback automatique multi-modèles.
+
+    Si le modèle courant retourne 404 (retiré), 429 (rate limit) ou une
+    erreur réseau, passe automatiquement au modèle suivant de MODELES_FALLBACK.
+    Lève ConnectionError si tous les modèles échouent.
+
+    Note : requests envoie un User-Agent standard qui passe le WAF Cloudflare,
     contrairement à urllib qui est bloqué (error 1010).
     """
     try:
@@ -102,29 +121,66 @@ def _appeler_api_groq(historique_messages: list, system_prompt: str) -> str:
 
     messages_complets = [{"role": "system", "content": system_prompt}] + historique_messages
 
-    try:
-        reponse = req.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={
-                "model": "llama-3.3-70b-versatile",
-                "messages": messages_complets,
-                "max_tokens": 1024,
-                "temperature": 0.3,
-            },
-            timeout=30,
-        )
-        reponse.raise_for_status()
-        return reponse.json()["choices"][0]["message"]["content"]
+    derniere_erreur = None
 
-    except req.exceptions.HTTPError as exc:
+    for modele in MODELES_FALLBACK:
         try:
-            msg = exc.response.json().get("error", {}).get("message", str(exc))
-        except Exception:
-            msg = str(exc)
-        raise ConnectionError(f"Erreur API Groq ({exc.response.status_code}) : {msg}") from exc
-    except req.exceptions.RequestException as exc:
-        raise ConnectionError(f"Erreur réseau Groq : {exc}") from exc
+            logger.info("Tentative avec le modèle : %s", modele)
+
+            reponse = req.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": modele,
+                    "messages": messages_complets,
+                    "max_tokens": 1024,
+                    "temperature": 0.3,
+                },
+                timeout=30,
+            )
+            reponse.raise_for_status()
+
+            logger.info("Succès avec le modèle : %s", modele)
+            return reponse.json()["choices"][0]["message"]["content"]
+
+        except req.exceptions.HTTPError as exc:
+            statut = exc.response.status_code
+
+            # 404 = modèle retiré | 429 = rate limit → essayer le suivant
+            if statut in (404, 429):
+                try:
+                    msg = exc.response.json().get("error", {}).get("message", str(exc))
+                except Exception:
+                    msg = str(exc)
+
+                logger.warning(
+                    "Modèle %s indisponible (HTTP %d) : %s — passage au suivant",
+                    modele, statut, msg
+                )
+                derniere_erreur = ConnectionError(
+                    f"Modèle {modele} échoué (HTTP {statut}) : {msg}"
+                )
+                continue
+
+            # Autres erreurs HTTP (401, 500…) → échec immédiat
+            try:
+                msg = exc.response.json().get("error", {}).get("message", str(exc))
+            except Exception:
+                msg = str(exc)
+            raise ConnectionError(
+                f"Erreur API Groq ({statut}) : {msg}"
+            ) from exc
+
+        except req.exceptions.RequestException as exc:
+            logger.warning("Erreur réseau avec %s : %s — passage au suivant", modele, exc)
+            derniere_erreur = ConnectionError(f"Erreur réseau Groq : {exc}")
+            continue
+
+    # Tous les modèles ont échoué
+    raise derniere_erreur or ConnectionError(
+        "Tous les modèles Groq sont indisponibles. "
+        "Vérifiez votre clé API et les modèles disponibles."
+    )
 
 
 def generer_reponse_sav(question_utilisateur: str, historique_messages: list) -> tuple:
@@ -147,7 +203,7 @@ def generer_reponse_sav(question_utilisateur: str, historique_messages: list) ->
     except (ConnectionError, ValueError, RuntimeError, KeyError) as exc:
         logger.error("Erreur génération réponse SAV : %s", exc)
         if getattr(settings, "DEBUG", False):
-            reponse = f"⚙️ Erreur technique (DEBUG) : {exc}"
+            reponse = f"Erreur technique (DEBUG) : {exc}"
         else:
             reponse = (
                 "Je rencontre une difficulté technique momentanée. "
